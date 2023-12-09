@@ -7,7 +7,7 @@ def gitAuth = "4488bfb8-2d68-4419-a79e-ccbb9928c3fe"
 
 def projectName = "tensquare-front"
 def version = new Date().format("yyyy.MMdd.HHmmss", TimeZone.getTimeZone('Asia/Shanghai'))
-def workDir = "/root/docker/build"
+def workDir = "/root/jenkins/build"
 def contextPath = "${workDir}/${projectName}/${version}"
 
 node {
