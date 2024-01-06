@@ -37,10 +37,12 @@ podTemplate(label: 'jenkins-slave', cloud: 'k8s', serviceAccount: 'jenkins', con
 
         stage('Check') {
             withSonarQubeEnv('sonar') { // 'sonar'：安装 SonarQube Scanner 插件后设置的名为 sonar 的 SonarQube servers ，其中包含 SonarQube 的地址和 token
-                sh """
-                    sonar-scanner -Dsonar.projectname="${projectName}" -Dsonar.projectKey="${projectName}" \
-                    -Dsonar.sources=. -Dsonar.exclusions=**/dist/** -Dsonar.sourceEncoding=UTF-8
-                """
+                dir("${contextPath}") {
+                    sh """
+                        sonar-scanner -Dsonar.projectname="${projectName}" -Dsonar.projectKey="${projectName}" \
+                        -Dsonar.sources=. -Dsonar.exclusions=**/dist/** -Dsonar.sourceEncoding=UTF-8
+                    """
+                }
             }
             timeout(time: 1, unit: 'MINUTES') {
                 // waitForQualityGate : 等待 SonarQube 分析完成并返回质量状态，需要在 SonarQube 中配置 Webhook
