@@ -1,3 +1,9 @@
+/*
+kubectl create secret docker-registry harbor-auth -n k8s-tensquare-front \
+    --docker-server='harbor.zhch.lan' \
+    --docker-username='vito' \
+    --docker-password='Harbor12345'
+ */
 
 podTemplate(label: 'jenkins-slave', cloud: 'k8s', serviceAccount: 'jenkins', containers: [
     containerTemplate(
