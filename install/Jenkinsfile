@@ -1,0 +1,99 @@
+
+podTemplate(label: 'jenkins-slave', cloud: 'k8s', serviceAccount: 'jenkins', containers: [
+    containerTemplate(
+      name: 'jnlp',
+      image: "harbor.zhch.lan/library/inbound-agent:3198.jdk17-node12"
+    )
+  ],
+  volumes: [
+    hostPathVolume(mountPath: '/var/run/docker.sock', hostPath: '/var/run/docker.sock'),
+    hostPathVolume(mountPath: '/usr/bin/docker', hostPath: '/usr/bin/docker'),
+    hostPathVolume(mountPath: '/usr/bin/kubectl', hostPath: '/usr/bin/kubectl')
+  ]
+)
+{
+    def harborUrl = "harbor.zhch.lan"
+    def harborAuth = "db9ca6e9-6c79-4ec4-a4ab-aba89df6a865"
+    def harborProject = "tensquare-front"
+
+    def gitUrl = "git@gitee.com:hczhch/tensquare-admin.git"
+    def gitAuth = "6abb5fce-19df-4890-86e1-f0350eb44d91"
+
+    def projectName = "tensquare-front"
+    def version = new Date().format("yyyy.MMdd.HHmmss", TimeZone.getTimeZone('Asia/Shanghai'))
+    def workDir = "/home/jenkins/build"
+    def contextPath = "${workDir}/${projectName}/${version}"
+
+    node("jenkins-slave") {
+        stage('Clone') {
+            echo "Create contextPath: ${contextPath}"
+            sh "mkdir -p ${contextPath}"
+            dir("${contextPath}") {
+                echo "Checkout start"
+                checkout scmGit(branches: [[name: '*/${BRANCH_NAME}']], extensions: [], userRemoteConfigs: [[credentialsId: "${gitAuth}", url: "${gitUrl}"]])
+                echo "Checkout done."
+            }
+        }
+
+        stage('Check') {
+            withSonarQubeEnv('sonar') { // 'sonar'：安装 SonarQube Scanner 插件后设置的名为 sonar 的 SonarQube servers ，其中包含 SonarQube 的地址和 token
+                sh """
+                    sonar-scanner -Dsonar.projectname="${projectName}" -Dsonar.projectKey="${projectName}" \
+                    -Dsonar.sources=. -Dsonar.exclusions=**/dist/** -Dsonar.sourceEncoding=UTF-8
+                """
+            }
+            timeout(time: 1, unit: 'MINUTES') {
+                // waitForQualityGate : 等待 SonarQube 分析完成并返回质量状态，需要在 SonarQube 中配置 Webhook
+                waitForQualityGate abortPipeline: true
+            }
+        }
+
+        stage('Build') {
+            dir("${contextPath}") {
+                sh '''
+                    cnpm install
+                    cnpm run build
+                '''
+            }
+        }
+
+        def containerName = "${projectName}-${BRANCH_NAME}"
+        def image = "${harborUrl}/${harborProject}/${containerName}:${version}"
+        stage('Image') {
+            dir("${contextPath}/install") {
+                sh "mv ${contextPath}/dist ."
+
+                sh "docker build -t ${image} ."
+
+                // 登录 harbor
+                withCredentials([usernamePassword(credentialsId: "$harborAuth", passwordVariable: 'PASSWD', usernameVariable: 'UNAME')]) {
+                    sh "echo $PASSWD | docker login -u $UNAME --password-stdin $harborUrl"
+                }
+                // 推送镜像
+                sh "docker push ${image}"
+
+                // 删除本地镜像
+                sh "docker rmi ${image}"
+            }
+        }
+
+        stage('Publish') {
+            def namespace = "${BRANCH_NAME}-${projectName}"
+
+            dir("${contextPath}/install") {
+                sh """
+                    sed -i "s/NAMESPACE/${namespace}/g" install.yaml
+                    sed -i "s/HARBOR/${harborUrl}/g" install.yaml
+                    sed -i "s/PROJECT/${harborProject}/g" install.yaml
+                    sed -i "s/IMAGE/${containerName}/g" install.yaml
+                    sed -i "s/TAG/${version}/g" install.yaml
+
+                    kubectl apply -f install.yaml
+                """
+            }
+            echo "Publish down"
+        }
+
+    }
+}
+

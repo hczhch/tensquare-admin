@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tensquare-front
+  namespace: NAMESPACE
+  labels:
+    app: tensquare-front
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tensquare-front
+  template:
+    metadata:
+      labels:
+        app: tensquare-front
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: "app"
+                      operator: In
+                      values:
+                        - tensquare-front
+                topologyKey: "kubernetes.io/hostname"
+      imagePullSecrets:
+        - name: harbor-auth
+      containers:
+        - name: tensquare-front
+          image: HARBOR/PROJECT/IMAGE:TAG
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: web
+              containerPort: 80
+              protocol: TCP
+          volumeMounts:
+            - name: timezone
+              mountPath: /etc/localtime
+              readOnly: true
+      volumes:
+        - name: timezone
+          hostPath:
+            path: /usr/share/zoneinfo/Asia/Shanghai
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tensquare-front-headless
+  namespace: NAMESPACE
+  labels:
+    app: tensquare-front-headless
+spec:
+  type: ClusterIP
+  selector:
+    app: tensquare-front
+  ports:
+    - name: web
+      port: 80
+      targetPort: web
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tensquare-front
+  namespace: NAMESPACE
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - tensquare-front.zhch.lan
+      secretName: zhch.lan
+  rules:
+    - host: tensquare-front.zhch.lan
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: tensquare-front-headless
+                port:
+                  name: web

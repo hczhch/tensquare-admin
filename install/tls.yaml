@@ -1,0 +1,7 @@
+# 需提前手动创建好资源
+
+kubectl create namespace k8s-tensquare-front
+
+kubectl create secret tls zhch.lan -n k8s-tensquare-front \
+--cert=/home/zc/cert/zhch.lan.crt \
+--key=/home/zc/cert/zhch.lan.key
