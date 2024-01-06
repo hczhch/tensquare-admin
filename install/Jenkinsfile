@@ -63,17 +63,14 @@ podTemplate(label: 'jenkins-slave', cloud: 'k8s', serviceAccount: 'jenkins', con
             dir("${contextPath}/install") {
                 sh "mv ${contextPath}/dist ."
 
-                sh "docker build -t ${image} ."
+                sh "sudo docker build -t ${image} ."
 
                 // 登录 harbor
                 withCredentials([usernamePassword(credentialsId: "$harborAuth", passwordVariable: 'PASSWD', usernameVariable: 'UNAME')]) {
-                    sh "echo $PASSWD | docker login -u $UNAME --password-stdin $harborUrl"
+                    sh "echo $PASSWD | sudo docker login -u $UNAME --password-stdin $harborUrl"
                 }
                 // 推送镜像
-                sh "docker push ${image}"
-
-                // 删除本地镜像
-                sh "docker rmi ${image}"
+                sh "sudo docker push ${image}"
             }
         }
 
